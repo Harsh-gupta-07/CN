@@ -3,7 +3,7 @@
 | Name | Enrollment Number | Mac Number |
 | --- | --- | --- |
 | Harshvardhan Gupta | 2401010185 | 1 |
-| Shivansh Upadhyay | 2401020115 | 2 |
+| Shivansh Upadhyay | 2401020109 | 2 |
 | Harsha Gonela | 2401010181 | 3 |
 | Saumya kumar | 2401010432 | 4 |
 
