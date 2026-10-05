@@ -1,20 +1,13 @@
-Oct  4 18:19:03 dnsmasq[20001]: query[A] gateway.fe2.apple-dns.net from 10.7.8.211
-Oct  4 18:19:03 dnsmasq[20001]: cached gateway.fe2.apple-dns.net is 17.248.239.66
-Oct  4 18:19:03 dnsmasq[20001]: cached gateway.fe2.apple-dns.net is 17.248.239.65
-Oct  4 18:19:03 dnsmasq[20001]: cached gateway.fe2.apple-dns.net is 17.248.239.10
-Oct  4 18:19:03 dnsmasq[20001]: reply gateway.fe2.apple-dns.net is <HTTPS>
-Oct  4 18:19:04 dnsmasq[20001]: query[A] ocsp2.g.aaplimg.com from 10.7.8.211
-Oct  4 18:19:04 dnsmasq[20001]: forwarded ocsp2.g.aaplimg.com to 8.8.8.8
-Oct  4 18:19:04 dnsmasq[20001]: reply ocsp2.g.aaplimg.com is 17.253.18.202
-Oct  4 18:19:04 dnsmasq[20001]: reply ocsp2.g.aaplimg.com is 17.253.18.209
-Oct  4 18:19:10 dnsmasq[20001]: query[A] mmx-ds.cdn.whatsapp.net from 10.7.22.173
-Oct  4 18:19:10 dnsmasq[20001]: forwarded mmx-ds.cdn.whatsapp.net to 8.8.8.8
-Oct  4 18:19:10 dnsmasq[20001]: reply mmx-ds.cdn.whatsapp.net is 57.144.147.32
-Oct  4 18:19:11 dnsmasq[20001]: query[HTTPS] media.fdel3-4.fna.whatsapp.net from 10.7.8.211
-Oct  4 18:19:11 dnsmasq[20001]: forwarded media.fdel3-4.fna.whatsapp.net to 8.8.8.8
-Oct  4 18:19:11 dnsmasq[20001]: query[A] media.fdel3-4.fna.whatsapp.net from 10.7.8.211
-Oct  4 18:19:11 dnsmasq[20001]: forwarded media.fdel3-4.fna.whatsapp.net to 8.8.8.8
-Oct  4 18:19:11 dnsmasq[20001]: reply media.fdel3-4.fna.whatsapp.net is <HTTPS>
-Oct  4 18:19:11 dnsmasq[20001]: reply media.fdel3-4.fna.whatsapp.net is 49.44.247.164
-Oct  4 18:19:22 dnsmasq[20001]: query[A] mmx-ds.cdn.whatsapp.net from 10.7.8.211
-Oct  4 18:19:22 dnsmasq[20001]: cached mmx-ds.cdn.whatsapp.net is 57.144.147.32
+Harsh@Harshvardhans-MacBook-Pro-2 CN end-sem % sudo tail 30 /tmp/dnsmasq.log
+tail: 30: No such file or directory
+==> /tmp/dnsmasq.log <==
+Oct  5 12:06:55 dnsmasq[15273]: reply gemini.google.com is 142.251.152.2
+Oct  5 12:06:55 dnsmasq[15273]: reply gemini.google.com is 142.251.155.2
+Oct  5 12:06:55 dnsmasq[15273]: reply gemini.google.com is 142.251.153.2
+Oct  5 12:06:55 dnsmasq[15273]: reply gemini.google.com is 142.251.154.2
+Oct  5 12:06:55 dnsmasq[15273]: reply gemini.google.com is 142.251.151.2
+Oct  5 12:06:55 dnsmasq[15273]: reply gemini.google.com is NODATA
+Oct  5 12:07:09 dnsmasq[15273]: query[A] mmx-ds.cdn.whatsapp.net from 10.7.22.173
+Oct  5 12:07:09 dnsmasq[15273]: cached mmx-ds.cdn.whatsapp.net is 57.144.147.32
+Oct  5 12:07:23 dnsmasq[15273]: query[A] app.jio.test from 10.7.8.211
+Oct  5 12:07:23 dnsmasq[15273]: config app.jio.test is 10.7.8.211
