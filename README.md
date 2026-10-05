@@ -1,156 +1,250 @@
-# Architecture: Team Jio, Phase 1
+## Team Members
 
-A private three-Mac LAN that mimics a small cloud deployment: private DNS, a TLS-terminating load balancer, and two application backends.
+| Name | Enrollment Number | Mac Number |
+| --- | --- | --- |
+| Harshvardhan Gupta | 2401010185 | 1 |
+| Shivansh Upadayay | 2401020115 | 2 |
+| Harsha Gonela | 2401010181 | 3 |
+| Saumya kumar | 2401010432 | 4 |
 
-**Goal:** a client resolves `app.jio.test`, connects over HTTPS to `:8443`, and receives responses from both backends in turn.
 
-## 1. Topology
+# Team Jio: Phase 1 (Build & Observe)
 
-```mermaid
-flowchart LR
-  C["Client (Mac 1 / Mac 2 / Mac 3)"]
-  subgraph LAN["Private Wi-Fi LAN"]
-    D["Mac 1: dnsmasq<br/>MAC1_IP:53"]
-    E["Mac 2: nginx edge<br/>MAC2_IP:8443"]
-    subgraph B["Mac 3"]
-      A1["Backend A :3001"]
-      B1["Backend B :3002"]
-    end
-  end
-  C -- "1. DNS query (UDP/53)" --> D
-  D -- "A record = MAC2_IP" --> C
-  C -- "2. HTTPS (TCP/8443)" --> E
-  E -- "3. HTTP, round robin" --> A1
-  E --> B1
-```
+A private LAN deployment: dnsmasq DNS, an nginx HTTPS load balancer, and two backends. A client opens `https://app.jio.test:8443` and gets responses from Backend A and Backend B in turn.
 
-## 2. Machines and Addresses
+## Machines and IPs
 
-| Machine | Role | 
-| --- | --- |
-| Mac 1 | DNS server + client 
-| Mac 2 | nginx edge (LB + TLS) + client 
-| Mac 3 | Backend A + B + client 
-
-## 3. Components
-
-| Component | Software | Listens on | Job |
+| Machine | Role | IP | Ports |
 | --- | --- | --- | --- |
-| DNS | dnsmasq | MAC1_IP:53 (UDP/TCP) | Answers `app.jio.test` and `api.jio.test` with Mac 2's IP; forwards all other names to 8.8.8.8 |
-| Edge | nginx 1.31 | :8080 (redirect), :8443 (TLS) | Terminates TLS, load-balances across backends, redirects HTTP to HTTPS |
-| Backend A | `server.py A 3001` | 0.0.0.0:3001 | Serves `/`, `/api/status`, `/api/static`; adds `X-Backend: A` |
-| Backend B | `server.py B 3002` | 0.0.0.0:3002 | Same code, adds `X-Backend: B` |
-| CA | OpenSSL, "Jio Local CA" | n/a | Signs the server certificate; trusted in every client's System Keychain |
+| Mac 1 | DNS server (dnsmasq) + client | `10.7.22.173` | 53 (UDP/TCP) |
+| Mac 2 | nginx edge: load balancer + TLS + client | `10.7.8.211` | 8080 (redirect), 8443 (HTTPS) |
+| Mac 3 | Backend A + client | `10.7.16.102` | 3001 |
+| Mac 4 | Backend B (same IP as Mac 3) | `10.7.16.102` | 3002 |
 
-## 4. Request Flow
+Domain: `app.jio.test`, `api.jio.test` (both resolve to Mac 2). CA name: `Jio Local CA`.
 
-```mermaid
-sequenceDiagram
-  participant C as Client
-  participant D as Mac 1 (DNS)
-  participant E as Mac 2 (nginx)
-  participant B as Mac 3 (A or B)
-  C->>D: A? app.jio.test (UDP/53)
-  D-->>C: MAC1_IP
-  C->>E: TCP SYN / SYN-ACK / ACK (port 8443)
-  C->>E: TLS ClientHello (SNI = app.jio.test)
-  E-->>C: ServerHello + Certificate (signed by Jio Local CA)
-  Note over C,E: Key exchange, Finished, encrypted from here
-  C->>E: GET /api/status (HTTP/2, encrypted)
-  E->>B: GET /api/status (plain HTTP, next upstream)
-  B-->>E: 200 + X-Backend
-  E-->>C: 200 + X-Backend (encrypted)
+If any IP changes, update: `listen-address` and `host-record` (Mac 1 dnsmasq), the `upstream` block (Mac 2 nginx), and each client's DNS setting. Check with `ipconfig getifaddr en0`.
+
+## Repository layout
+
+```
+configs/   dnsmasq.conf, nginx.conf        (no private keys)
+backend/   server.py
+docs/      architecture.md
+evidence/  screenshots, pcaps, outputs
 ```
 
-### Layer map
+## Prerequisites
 
-| Layer | What happens here | Protocol / port |
-| --- | --- | --- |
-| Application | Name lookup; the web request | DNS (UDP/53), HTTP/2 |
-| Security | Server authentication and encryption | TLS 1.2 / 1.3 |
-| Transport | Reliable connection to the edge | TCP 8443 (DNS uses UDP 53) |
-| Network | Host addressing | IPv4 (10.7.x.x) |
-| Link | Frames over the LAN | Wi-Fi (en0) |
+- All Macs on the same Wi-Fi, with working Mac-to-Mac ping.
+- Homebrew paths assume Apple Silicon (`/opt/homebrew`). If `brew --prefix` prints `/usr/local`, replace the prefix.
+- Mac 1: `brew install dnsmasq bind`
+- Mac 2: `brew install nginx openssl`
+- Mac 3 / Mac 4: Python 3 (`brew install python`)
 
-TLS ends at nginx. The hop from nginx to the backends is plain HTTP inside the LAN.
+## One-time setup
 
-## 5. Configuration Summary
+### Mac 1: DNS config
 
-**dnsmasq (Mac 1).** `listen-address` is Mac 1's IP plus 127.0.0.1. Two `host-record` lines map `app.jio.test` and `api.jio.test` to Mac 2. `no-resolv` with `server=8.8.8.8` forwards everything else, so internet access keeps working. Clients use it because their Wi-Fi DNS server is set to Mac 1.
+`/opt/homebrew/etc/dnsmasq.conf`:
 
-**nginx (Mac 2).**
-- `upstream app_backend` lists both backends with `max_fails=2 fail_timeout=10s`. Selection is round robin.
-- The `:8080` server returns a 301 redirect to `https://$host:8443$request_uri`.
-- The `:8443` server holds the certificate and key, allows TLS 1.2 and 1.3, enables HTTP/2, and proxies with `proxy_pass http://app_backend`.
-- `proxy_set_header` passes `Host`, `X-Real-IP`, `X-Forwarded-For` and `X-Forwarded-Proto` to the backend.
-- `proxy_connect_timeout 2s` and `proxy_next_upstream error timeout http_502 http_503` retry a failed request on the other backend.
+```conf
+listen-address=127.0.0.1,10.7.22.173
+no-resolv
+server=8.8.8.8
+domain-needed
+host-record=app.jio.test,10.7.8.211
+host-record=api.jio.test,10.7.8.211
+log-queries
+log-facility=/tmp/dnsmasq.log
+```
 
-**Backends (Mac 3).** One stdlib Python script run twice with different ID and port. `/api/status` returns `Cache-Control: no-store`. `/api/static` returns `Cache-Control: max-age=60` and an `ETag`, and a 304 when `If-None-Match` matches. The ETag is computed from the body, so both backends produce the same value.
+### Mac 2: certificate (CA + server cert)
 
-## 6. Security Design
+```bash
+export PATH="/opt/homebrew/opt/openssl/bin:$PATH"
+mkdir -p ~/jio-ca && cd ~/jio-ca
+openssl genrsa -out ca.key 4096
+openssl req -x509 -new -key ca.key -sha256 -days 365 -subj "/CN=Jio Local CA" \
+  -addext "basicConstraints=critical,CA:TRUE" -out ca.crt
+openssl genrsa -out app.key 2048
+openssl req -new -key app.key -subj "/CN=app.jio.test" -out app.csr
+cat > san.ext <<EOF
+subjectAltName=DNS:app.jio.test,DNS:api.jio.test
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+EOF
+openssl x509 -req -in app.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -out app.crt -days 90 -sha256 -extfile san.ext
+sudo mkdir -p /opt/homebrew/etc/nginx/certs
+sudo cp app.crt app.key /opt/homebrew/etc/nginx/certs/
+```
 
-- A private CA (`Jio Local CA`) signs one server certificate with SANs `app.jio.test` and `api.jio.test`. Browsers validate the SAN, not the CN.
-- Only `ca.crt` is distributed. `ca.key` stays on Mac 2 and is never committed.
-- Each client installs the CA with `security add-trusted-cert` into the System Keychain, so no `-k` is needed. A client without the CA gets a verification error, which proves validation is real.
-- Certificate lifetime: server certificate 90 days, CA 365 days.
+Never commit `ca.key` or `app.key`. Share only `ca.crt`.
 
-## 7. Caching
+### Mac 2: nginx config
 
-| Endpoint | Headers | Client behaviour |
-| --- | --- | --- |
-| `/api/static` | `Cache-Control: max-age=60`, `ETag` | within 60 s served from cache; afterwards a conditional request gets `304 Not Modified` |
-| `/api/status` | `Cache-Control: no-store` | always a full request |
+`/opt/homebrew/etc/nginx/nginx.conf`:
 
-nginx does not cache. Caching happens in the client (browser or curl).
+```nginx
+worker_processes 1;
+events { worker_connections 1024; }
 
-## 8. Load Balancing and Failure Behaviour
+http {
+  upstream app_backend {
+    server 10.7.16.102:3001 max_fails=2 fail_timeout=10s;
+    server 10.7.16.102:3002 max_fails=2 fail_timeout=10s;
+  }
 
-| Situation | Result | Why |
-| --- | --- | --- |
-| Both backends up | Responses alternate A, B, A, B | round robin |
-| One backend down | All requests still `200` from the survivor; one short delay at most | passive health check (`max_fails`) plus `proxy_next_upstream` |
-| Both down | `502 Bad Gateway` from nginx | DNS, TCP and TLS still succeed; failure is behind the edge |
-| Wrong client DNS | Name fails, pinging the IP still works | DNS and IP reachability are independent |
-| Wrong DNS record | Name resolves to a wrong address, then timeout or refusal | DNS is a directory, not a connection |
-| Wrong port | Connection refused, host still reachable | ports identify services, IPs identify hosts |
+  server {
+    listen 8080;
+    server_name app.jio.test api.jio.test;
+    return 301 https://$host:8443$request_uri;
+  }
 
-## 9. Cloud Equivalents
+  server {
+    listen 8443 ssl;
+    http2 on;
+    server_name app.jio.test api.jio.test;
+    ssl_certificate     /opt/homebrew/etc/nginx/certs/app.crt;
+    ssl_certificate_key /opt/homebrew/etc/nginx/certs/app.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
 
-| Our lab | In the cloud |
-| --- | --- |
-| dnsmasq on Mac 1 | Route 53 / private hosted zone |
-| nginx on Mac 2 | Application Load Balancer or CDN edge (TLS termination) |
-| `upstream` block | ALB target group |
-| `max_fails` / `fail_timeout` | target health checks |
-| Backends on Mac 3 | EC2 instances / containers |
-| Jio Local CA | ACM / a public CA |
-| Wi-Fi LAN | VPC subnet |
+    location / {
+      proxy_pass http://app_backend;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_connect_timeout 2s;
+      proxy_next_upstream error timeout http_502 http_503;
+    }
+  }
+}
+```
 
-## 10. Start Order and Dependencies
+### Every client Mac: trust the CA
+
+Copy `ca.crt` to the Mac (AirDrop or `scp`), then from its folder:
+
+```bash
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt
+```
+
+Use `/usr/bin/curl` for tests: it uses the macOS keychain, Homebrew's curl does not.
+
+## Run the project (in this order)
 
 DNS first, then backends, then the edge, then clients.
 
-1. Mac 1: `sudo brew services start dnsmasq`; check `dig @10.7.22.173 app.jio.test +short`
-2. Mac 3: `python3 server.py A 3001` and `python3 server.py B 3002`
-3. Mac 2: `sudo nginx -t && sudo nginx`
-4. Clients: `sudo networksetup -setdnsservers Wi-Fi 10.7.22.173`, then flush the DNS cache
-5. Verify: `/usr/bin/curl -sI https://app.jio.test:8443/api/status | grep -i x-backend`
+**1. All Macs:** same Wi-Fi, IPs unchanged, keep awake.
 
-Shutdown reverses this and restores each client's DNS with `sudo networksetup -setdnsservers Wi-Fi Empty`.
+```bash
+ipconfig getifaddr en0
+caffeinate -d &
+```
 
-## 11. Repository and Evidence Map
+**2. Mac 1: start DNS**
 
-| Path | Contents |
-| --- | --- |
-| `configs/` | `dnsmasq.conf`, `nginx.conf`, certificate notes (no private keys) |
-| `backend/` | `server.py` and run instructions |
-| `scripts/` | start and stop scripts per Mac |
-| `evidence/01_lan` … `08_failures` | IP table, DNS, backends, load balancer, TLS, cache, pcaps, failure demos |
-| `docs/architecture.md` | this document |
+```bash
+sudo brew services start dnsmasq
+sudo lsof -nP -i :53                       # shows dnsmasq
+dig @10.7.22.173 app.jio.test +short       # prints 10.7.8.211
+```
 
-## 12. Assumptions and Limits
+**3. Mac 3 / Mac 4: start the backends** (from the `backend/` folder)
 
-- Single point of failure: DNS (Mac 1) and the edge (Mac 2) have no redundancy in Phase 1.
-- Both backends run on one machine (Mac 3), so a Mac 3 failure takes both down.
-- Ports 8080/8443 are used instead of 80/443.
-- Backends are reached over plain HTTP inside the LAN.
+```bash
+python3 server.py A 3001
+python3 server.py B 3002
+```
+
+Click **Allow** on any firewall prompt. Verify from Mac 2:
+
+```bash
+curl -i http://10.7.16.102:3001/api/status     # X-Backend: A
+curl -i http://10.7.16.102:3002/api/status     # X-Backend: B
+```
+
+**4. Mac 2: start nginx**
+
+```bash
+sudo nginx -t && sudo nginx                    # reload later: sudo nginx -s reload
+lsof -iTCP:8443 -sTCP:LISTEN
+```
+
+**5. Every client Mac: use Mac 1 as DNS**
+
+Before changing anything, check that this works from the client: `dig @10.7.22.173 app.jio.test +short`. Then:
+
+```bash
+sudo networksetup -setdnsservers Wi-Fi 10.7.22.173
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+networksetup -getdnsservers Wi-Fi              # 10.7.22.173
+```
+
+**6. Verify from a client**
+
+```bash
+dig app.jio.test                               # SERVER: 10.7.22.173, answer 10.7.8.211
+for i in 1 2 3 4 5 6; do /usr/bin/curl -sI https://app.jio.test:8443/api/status | grep -i x-backend; done
+```
+
+Expected: `A` and `B` alternating, with no certificate warning and no `-k`.
+
+Other checks:
+
+```bash
+/usr/bin/curl -I https://app.jio.test:8443/api/static    # Cache-Control: max-age=60 + ETag
+curl -I http://app.jio.test:8080/                         # 301 to https://app.jio.test:8443/
+```
+
+## Shut down (restore every Mac)
+
+```bash
+# Mac 1
+sudo brew services stop dnsmasq
+sudo lsof -nP -i :53                                      # prints nothing
+# Mac 2
+sudo nginx -s stop
+# Mac 3 / Mac 4: Ctrl-C each server.py
+# Every Mac
+sudo networksetup -setdnsservers Wi-Fi Empty
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+networksetup -getdnsservers Wi-Fi                         # "There aren't any DNS Servers set"
+```
+
+To remove the trusted CA (use the exact name from `openssl x509 -in ca.crt -noout -subject`):
+
+```bash
+sudo security delete-certificate -c "Jio Local CA" /Library/Keychains/System.keychain
+sudo security remove-trusted-cert -d ca.crt
+```
+
+## Failure demos (summary)
+
+| # | Break | Expected |
+| --- | --- | --- |
+| 1 | Client DNS set to `192.0.2.1` | name fails, `ping 10.7.8.211` works |
+| 2 | Change `host-record` to a wrong IP, restart dnsmasq | resolves to the wrong host, timeout |
+| 3 | Stop Backend A | all requests succeed from B |
+| 4 | Stop both backends | `502 Bad Gateway` |
+| 5 | `curl https://app.jio.test:4443` | connection refused |
+
+Restore after each demo and re-run the A/B loop.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `dig` times out, even to `127.0.0.1` | dnsmasq not running or started without `sudo` | `sudo brew services restart dnsmasq`; run it in the foreground to see errors |
+| `app.jio.test` resolves to the wrong IP | wrong `host-record`, dnsmasq not restarted, or stale cache | fix the record to `10.7.8.211`, restart dnsmasq, flush the client cache |
+| `Connection refused` on 8443 | nginx not running, or the name points at the wrong Mac | `sudo nginx -t && sudo nginx`; check `dig app.jio.test +short` |
+| `502 Bad Gateway` | backends down or wrong upstream IP | start both `server.py`, check `curl http://10.7.16.102:3001/api/status` from Mac 2 |
+| Certificate error | CA not trusted on this client, or Homebrew curl | install `ca.crt`; use `/usr/bin/curl` |
+| Chrome says unreachable or cancelled | no Local Network permission, or secure DNS enabled | Settings → Privacy & Security → Local Network → enable Chrome; turn off "Use secure DNS" |
+| Works on Mac 2, fails on other Macs | firewall or Wi-Fi client isolation | allow incoming connections for nginx/Python, or use a network without isolation |
+| Only `A` appears | Backend B not running or missing from `upstream` | start `server.py B 3002`; check `nginx.conf` |
+
+Always include the port in URLs (`:8080` / `:8443`).
