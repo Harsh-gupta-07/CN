@@ -1,0 +1,15 @@
+sudo tee /etc/pf.anchors/jio-isolation > /dev/null <<'EOF'
+# Backend isolation (Extension C) - same file on Mac 3 (Backend A :3001) and Mac 4 (Backend B :3002)
+
+# Machines allowed to reach the backends: only the edge, Mac 2.
+table <edges> persist { 10.7.2.8 }
+
+# 1. A Mac talking to itself (local tests, Mac 3's standby nginx -> Backend A) uses lo0: allow.
+pass in quick on lo0 all
+
+# 2. Only the edge may open connections to the backend ports.
+pass in quick proto tcp from <edges> to any port { 3001, 3002 }
+
+# 3. Everyone else is silently dropped on the backend ports.
+block drop in quick proto tcp from any to any port { 3001, 3002 }
+EOF
