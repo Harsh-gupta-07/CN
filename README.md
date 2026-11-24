@@ -21,7 +21,7 @@ A private LAN deployment: dnsmasq DNS, an nginx HTTPS load balancer, and two bac
 | Mac 3 | Backend A + client | `10.7.19.127` | 3001 |
 | Mac 4 | Backend B (same IP as Mac 3) | `10.7.24.144` | 3002 |
 
-Domain: `app.jio.test`, `api.jio.test` (both resolve to Mac 2). CA name: `Jio Local CA`.
+Domain: `app.jio.test`, `api.jio.test`, `ttl.jio.test` (both resolve to Mac 2). CA name: `Jio Local CA`.
 
 If any IP changes, update: `listen-address` and `host-record` (Mac 1 dnsmasq), the `upstream` block (Mac 2 nginx), and each client's DNS setting. Check with `ipconfig getifaddr en0`.
 
