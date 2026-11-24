@@ -1,0 +1,4 @@
+table <edges> persist { 10.7.2.8 }
+pass in quick on lo0 all
+pass in quick proto tcp from <edges> to any port { 3001, 3002 }
+block drop in quick proto tcp from any to any port { 3001, 3002 }

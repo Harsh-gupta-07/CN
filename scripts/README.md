@@ -1,13 +1,13 @@
-# jio-scripts: Phase 2 automation
+# scripts/: Phase 2 automation
 
 These scripts write the Phase 2 configs (dnsmasq, nginx, pf) from the four Mac IPs, start the services and check them. You don't hand-edit configs any more, and when an IP changes you run one command.
 
-Put this folder in the repo root (next to `server.py` and `ca.crt`, or set `SERVER_PY=` / pass the path). Copy it to all four Macs.
+Clone the repo on all four Macs and run everything from `scripts/`. The scripts find `../backend/server.py` and `../ca.crt` on their own (override with `SERVER_PY=` or pass the path).
 
 ## 1. Set the IPs (every Mac, same command)
 
 ```bash
-cd jio-scripts
+cd scripts
 ./set-ips.sh 10.7.17.214 10.7.2.8 10.7.19.127 10.7.24.144 --zshrc   # MAC1 MAC2 MAC3 MAC4
 ```
 
@@ -58,9 +58,9 @@ Then, from a client: `./check.sh`
 - Run the scripts as your normal user. They ask for `sudo` themselves.
 - The Homebrew path is detected (`/opt/homebrew` or `/usr/local`).
 - Overrides: `JIO_IF=en1`, `JIO_NET_SERVICE="USB 10/100/1000 LAN"`, `JIO_TTL=120`, `JIO_FORCE=1` (skip the "wrong Mac" check).
-- `ips.conf` and `.state` are per-checkout files. Add them to `.gitignore`.
+- `ips.conf` and `.state` are per-checkout files and are already in `scripts/.gitignore`.
 - Each server keeps its own copy of the DNS records, so run `dns.sh set` on **both** Mac 1 and Mac 3. The script reminds you.
-- The generated configs are your team's own files with only the IPs filled in. With the current IPs they are byte-identical to the Phase 2 `dnsmasq.conf`, `nginx.conf` and the `printf` pf rules.
+- The generated configs are your team's own files with only the IPs filled in. With the current IPs they are byte-identical to the files in `../configs/phase2/`.
 
 ## Backups
 

@@ -3,7 +3,7 @@
 #   ./backend.sh A        # on Mac 3
 #   ./backend.sh B        # on Mac 4
 # Stop it with Ctrl-C (that's the "kill Backend A" step in D4).
-# server.py is looked for in $SERVER_PY, this folder, its parent, then the current folder.
+# server.py is looked for in $SERVER_PY, this folder, ../backend/, its parent, then the current folder.
 . "$(dirname "$0")/lib.sh"
 load_ips
 
@@ -17,7 +17,7 @@ esac
 expect_role "$home" "Backend $which"
 
 py=""
-for p in "${SERVER_PY:-}" "$JIO_DIR/server.py" "$JIO_DIR/../server.py" "$PWD/server.py"; do
+for p in "${SERVER_PY:-}" "$JIO_DIR/server.py" "$JIO_DIR/../backend/server.py" "$JIO_DIR/../server.py" "$PWD/server.py"; do
   if [ -n "$p" ] && [ -f "$p" ]; then py=$p; break; fi
 done
 [ -n "$py" ] || die "server.py not found. Put it next to these scripts or run: SERVER_PY=/path/to/server.py $0 $which"
