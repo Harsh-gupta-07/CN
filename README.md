@@ -16,10 +16,10 @@ A private LAN deployment: dnsmasq DNS, an nginx HTTPS load balancer, and two bac
 
 | Machine | Role | IP | Ports |
 | --- | --- | --- | --- |
-| Mac 1 | DNS server (dnsmasq) + client | `10.7.22.173` | 53 (UDP/TCP) |
-| Mac 2 | nginx edge: load balancer + TLS + client | `10.7.8.211` | 8080 (redirect), 8443 (HTTPS) |
-| Mac 3 | Backend A + client | `10.7.16.102` | 3001 |
-| Mac 4 | Backend B (same IP as Mac 3) | `10.7.16.102` | 3002 |
+| Mac 1 | DNS server (dnsmasq) + client | `10.7.17.214` | 53 (UDP/TCP) |
+| Mac 2 | nginx edge: load balancer + TLS + client | `10.7.2.8` | 8080 (redirect), 8443 (HTTPS) |
+| Mac 3 | Backend A + client | `10.7.19.127` | 3001 |
+| Mac 4 | Backend B (same IP as Mac 3) | `10.7.24.144` | 3002 |
 
 Domain: `app.jio.test`, `api.jio.test` (both resolve to Mac 2). CA name: `Jio Local CA`.
 
@@ -93,8 +93,8 @@ events { worker_connections 1024; }
 
 http {
   upstream app_backend {
-    server 10.7.16.102:3001 max_fails=2 fail_timeout=10s;
-    server 10.7.16.102:3002 max_fails=2 fail_timeout=10s;
+    server 10.7.19.127:3001 max_fails=2 fail_timeout=10s;
+    server 10.7.19.127:3002 max_fails=2 fail_timeout=10s;
   }
 
   server {
@@ -163,8 +163,8 @@ python3 server.py B 3002
 Click **Allow** on any firewall prompt. Verify from Mac 2:
 
 ```bash
-curl -i http://10.7.16.102:3001/api/status     # X-Backend: A
-curl -i http://10.7.16.102:3002/api/status     # X-Backend: B
+curl -i http://10.7.19.127:3001/api/status     # X-Backend: A
+curl -i http://10.7.19.127:3002/api/status     # X-Backend: B
 ```
 
 **4. Mac 2: start nginx**
@@ -241,7 +241,7 @@ Restore after each demo and re-run the A/B loop.
 | `dig` times out, even to `127.0.0.1` | dnsmasq not running or started without `sudo` | `sudo brew services restart dnsmasq`; run it in the foreground to see errors |
 | `app.jio.test` resolves to the wrong IP | wrong `host-record`, dnsmasq not restarted, or stale cache | fix the record to `10.7.8.211`, restart dnsmasq, flush the client cache |
 | `Connection refused` on 8443 | nginx not running, or the name points at the wrong Mac | `sudo nginx -t && sudo nginx`; check `dig app.jio.test +short` |
-| `502 Bad Gateway` | backends down or wrong upstream IP | start both `server.py`, check `curl http://10.7.16.102:3001/api/status` from Mac 2 |
+| `502 Bad Gateway` | backends down or wrong upstream IP | start both `server.py`, check `curl http://10.7.19.127:3001/api/status` from Mac 2 |
 | Certificate error | CA not trusted on this client, or Homebrew curl | install `ca.crt`; use `/usr/bin/curl` |
 | Chrome says unreachable or cancelled | no Local Network permission, or secure DNS enabled | Settings → Privacy & Security → Local Network → enable Chrome; turn off "Use secure DNS" |
 | Works on Mac 2, fails on other Macs | firewall or Wi-Fi client isolation | allow incoming connections for nginx/Python, or use a network without isolation |
